@@ -35,9 +35,7 @@ from scipy.stats import skew, zscore
 
 from facemap import process, roi, utils
 from facemap.gui import (
-    cluster,
     guiparts,
-    help_windows,
     io,
     menus,
     neural_activity_window,
@@ -1286,7 +1284,9 @@ class MainW(QtWidgets.QMainWindow):
             savepath = self.save_path
         else:
             savepath = None
-        if self.motSVD_checkbox.isChecked() or self.movSVD_checkbox.isChecked():
+        print("Checking if ROIs are set")
+        if self.motSVD_checkbox.isChecked() or self.movSVD_checkbox.isChecked() or len(self.ROIs) > 0:
+            print("Processing ROIs")
             savename = process.run(
                 self.filenames, GUIobject=QtWidgets, parent=self, savepath=savepath
             )
