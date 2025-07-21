@@ -354,6 +354,24 @@ def load_movies(parent, filelist=None):
             parent.load_keypoints_from_videodir()
     return good
 
+def load_saccade(parent):
+    path = QFileDialog.getOpenFileName(parent, "Select a file", filter="MAT (*.mat)")
+    # Check if path exists
+    if path[0]:
+        try:
+            import scipy.io
+
+            saccade_data = scipy.io.loadmat(path[0])
+            parent.saccade_data = saccade_data['eye_movement_data']
+            parent.update_status_bar("Saccade data loaded")
+            parent.plot_saccade_data()
+        except Exception as e:
+            msg = QMessageBox(parent)
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText("Error loading saccade data: " + str(e))
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.exec_()
+
 
 def load_npy_file(parent, allow_mat=False):
     # Open a file dialog to select a folder

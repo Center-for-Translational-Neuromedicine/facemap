@@ -30,9 +30,9 @@ from qtpy.QtWidgets import (
     QStatusBar,
     QToolButton,
     QWidget,
+    QGraphicsItemGroup
 )
 from scipy.stats import skew, zscore
-
 from facemap import process, roi, utils
 from facemap.gui import (
     guiparts,
@@ -265,6 +265,7 @@ class MainW(QtWidgets.QMainWindow):
         self.cframe = 0
         self.traces1 = None
         self.traces2 = None
+        self.saccade_data = None
 
         ## Pose plot
         self.pose_scatterplot = pg.ScatterPlotItem(hover=True)
@@ -939,6 +940,7 @@ class MainW(QtWidgets.QMainWindow):
         self.keypoints_vtick = None
         self.svd_plot_vtick = None
         self.neural_win = None
+        self.saccade_data = None
 
     def pupil_sigma_change(self):
         self.pupil_sigma = float(self.sigma_box.text())
@@ -1286,7 +1288,9 @@ class MainW(QtWidgets.QMainWindow):
             savepath = self.save_path
         else:
             savepath = None
-        if self.motSVD_checkbox.isChecked() or self.movSVD_checkbox.isChecked():
+        print("Checking if ROIs are set")
+        if self.motSVD_checkbox.isChecked() or self.movSVD_checkbox.isChecked() or len(self.ROIs) > 0:
+            print("Processing ROIs")
             savename = process.run(
                 self.filenames, GUIobject=QtWidgets, parent=self, savepath=savepath
             )
@@ -2009,8 +2013,58 @@ class MainW(QtWidgets.QMainWindow):
                 pen=pg.mkPen(color=(255, 255, 255), width=2, movable=True),
             )
             selected_plot.addItem(self.keypoints_vtick)
+        if self.saccade_data is not None:
+            self.plot_saccade_data()
         selected_plot.setLimits(xMin=0, xMax=self.nframes)
         return tr
+
+    def plot_saccade_data(self):
+        """
+        Plot saccade data on the SVD traces plot as a single toggleable item.
+        """
+        if self.saccade_data is not None:
+            # Extract saccade data
+            saccade = self.saccade_data['Saccade'][0, 0].squeeze()
+
+            # Check if saccade data matches the number of frames
+            if saccade.shape[0] != self.nframes:
+                print("Saccade data shape does not match the number of frames.")
+                return
+
+            # Find start and end indices for saccades
+            sac_start_idx = np.where(np.diff(saccade) == 1)[0] + 1
+            sac_end_idx = np.where(np.diff(saccade) == -1)[0] + 1
+
+            # Remove any existing saccade overlays to avoid duplication
+            if hasattr(self, 'saccade_vspan_items') and self.saccade_vspan_items:
+                for item in self.saccade_vspan_items:
+                    self.svd_traces_plot.removeItem(item)
+
+            # Create a list to store the saccade region items
+            self.saccade_vspan_items = []
+
+            # Add vertical spans for each saccade
+            for start, end in zip(sac_start_idx, sac_end_idx):
+                if start < end and end < self.nframes:
+                    # Create a LinearRegionItem for the saccade
+                    vspan = pg.LinearRegionItem(
+                        values=(start, end),  # Start and end positions
+                        brush=pg.mkBrush(255, 255, 255, 50),  # Semi-transparent white
+                        movable=False,  # Non-movable
+                    )
+
+                    # Add the region to the plot
+                    self.svd_traces_plot.addItem(vspan)
+
+                    # Keep track of added items for later removal
+                    self.saccade_vspan_items.append(vspan)
+        else:
+            print("No saccade data available.")
+
+    def toggle_saccade_vspans(self, show):
+        # Toggles visibility of the saccade vspans group
+        if hasattr(self, 'saccade_vspan_group'):  # Check if the group exists
+            self.saccade_vspan_group.setVisible(show)
 
     def on_click_svd_plot(self, event):
         """
