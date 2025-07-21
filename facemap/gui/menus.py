@@ -23,6 +23,11 @@ def mainmenu(parent):
     load_proc.triggered.connect(lambda: io.open_proc(parent))
     parent.addAction(load_proc)
 
+    # Load saccade data
+    load_saccade = QAction("Load saccade data", parent)
+    load_saccade.triggered.connect(lambda: io.load_saccade(parent))
+    parent.addAction(load_saccade)
+
     # Set output folder
     set_output_folder = QAction("Set output folder", parent)
     set_output_folder.setShortcut("Ctrl+S")
@@ -95,6 +100,7 @@ def mainmenu(parent):
     file_menu.addAction(open_file)
     file_menu.addAction(open_folder)
     file_menu.addAction(load_proc)
+    file_menu.addAction(load_saccade)
     file_menu.addAction(set_output_folder)
 
     pose_menu = main_menu.addMenu("Pose")
