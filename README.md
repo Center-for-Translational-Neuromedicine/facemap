@@ -159,3 +159,69 @@ The encoding model used for prediction is described as follows:
 </p>
 
 Please see neural activity prediction [tutorial](https://github.com/MouseLand/facemap/blob/main/docs/neural_activity_prediction_tutorial.md) for more details.
+
+---
+
+## For CTN
+
+### Keypoint export to MATLAB
+
+When both the **Keypoints** checkbox and the **Save \*.mat** checkbox are ticked before pressing **Process**, Facemap will automatically append the keypoint traces to the `<videoname>_proc.mat` file alongside the SVD data. If no SVD was computed in the same run, a standalone `_proc.mat` is created containing only the keypoints.
+
+The following variables are added to the `.mat` file (one numbered set per video, following the same `_0`, `_1`, … convention as the SVD fields):
+
+| Variable | Size | Contents |
+|---|---|---|
+| `keypoints_x_0` | `n_bodyparts × n_frames` | X pixel coordinate of each bodypart over time |
+| `keypoints_y_0` | `n_bodyparts × n_frames` | Y pixel coordinate of each bodypart over time |
+| `keypoints_likelihood_0` | `n_bodyparts × n_frames` | Model confidence (0–1) for each bodypart at each frame |
+| `keypoints_labels_0` | `1 × n_bodyparts` cell array | Bodypart name strings — row order matches the matrices above |
+
+**Recommended usage in MATLAB:**
+```matlab
+% Load the file
+d = load('myvideo_proc.mat');
+
+% Apply a confidence threshold
+threshold = 0.5;
+reliable  = d.keypoints_likelihood_0 > threshold;
+x_clean   = d.keypoints_x_0;
+y_clean   = d.keypoints_y_0;
+x_clean(~reliable) = NaN;
+y_clean(~reliable) = NaN;
+```
+
+---
+
+### CTN GUI Plotting (`CTN_gui_plotting.py`)
+
+A standalone Python plotting tool for visualising keypoint and SVD traces from Facemap output files.
+
+**Run with:**
+```bash
+conda activate facemap
+python CTN_gui_plotting.py
+```
+
+**GUI controls:**
+
+| Control | Description |
+|---|---|
+| **Folder / File** | Browse to the folder containing `*_FacemapPose.h5` and `*_proc.npy` files. If multiple recordings are present a dropdown lets you select which one to use. |
+| **FPS** | Recording frame rate in frames per second. Used to convert the time axis to seconds. |
+| **External Inputs** | Toggle on to define one or more labelled time ranges (e.g. stimulus epochs). Each input has a name, a from–to range, and a seconds / frames selector. Inputs are drawn as shaded bands on all plots. |
+| **Plot Eye** | Opens the Eye Analysis window (see below). |
+
+**Eye Analysis window:**
+
+The window has a plot panel on the left and a y-limit control sidebar on the right.
+
+*Upper subplot* — x (solid) and y (dashed) coordinates of all four eye keypoints (`eye(back)`, `eye(bottom)`, `eye(front)`, `eye(top)`) plotted on the same axes, colour-coded by bodypart.
+
+*Centre displacement subplot* — two overlaid traces on a dual y-axis:
+- **Left axis (blue):** Euclidean distance of the instantaneous eye centre from its time-averaged reference position (in pixels).
+- **Right axis (red):** Angular direction of that displacement (−180° to +180°).
+
+*Per-keypoint distance subplots (×4)* — one panel per eye bodypart showing the Euclidean distance of that keypoint from the instantaneous centre of all four eye keypoints over time.
+
+**Y-axis limits sidebar:** each subplot has a Min and Max field pre-filled with the auto-computed limits. Press **Apply limits** to update the figure, or **Reset to auto** to restore automatic scaling.
