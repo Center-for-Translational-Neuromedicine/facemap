@@ -163,7 +163,7 @@ def open_proc(parent, file_name=None):
             else:
                 k = 0
 
-            kt = [0, 0, 0, 0]
+            kt = [0, 0, 0, 0, 0]
             # whether or not you can move the ROIs
             moveable = not parent.processed
             if proc["rois"] is not None:

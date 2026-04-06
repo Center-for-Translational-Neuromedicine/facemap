@@ -32,6 +32,7 @@ from qtpy.QtWidgets import (
     QWidget,
     QGraphicsItemGroup
 )
+import scipy.io
 from scipy.stats import skew, zscore
 from facemap import process, roi, utils
 from facemap.gui import (
@@ -1301,11 +1302,57 @@ class MainW(QtWidgets.QMainWindow):
             if self.pose_model is None:
                 self.setup_pose_model()
             if not self.pose_gui.cancel_bbox_selection:
+                self.poseFilepath = []  # clear stale paths before a fresh run
                 self.pose_model.run()
                 self.update_status_bar("Pose labels saved in " + savepath)
                 self.pose_model.plot_pose_estimates()
+                if self.save_mat.isChecked() and self.is_pose_loaded:
+                    self._export_keypoints_to_mat(savepath)
             else:
                 self.update_status_bar("Pose estimation cancelled")
+
+    def _export_keypoints_to_mat(self, savepath):
+        # Determine paths for .npy and .mat (mirrors logic in process.save())
+        videoname = os.path.splitext(os.path.basename(self.filenames[0][0]))[0]
+        if savepath is not None and len(savepath) > 0:
+            basename = savepath
+        else:
+            basename = os.path.dirname(self.filenames[0][0])
+        mat_path = os.path.join(basename, "%s_proc.mat" % videoname)
+        npy_path = os.path.join(basename, "%s_proc.npy" % videoname)
+
+        # Build keypoint arrays — one numbered entry per video, matching proc convention
+        kp_dict = {}
+        for i in range(len(self.poseFilepath)):
+            suffix = "_%d" % i
+            kp_dict["keypoints_x" + suffix] = self.pose_x_coord[i]        # n_bodyparts x n_frames
+            kp_dict["keypoints_y" + suffix] = self.pose_y_coord[i]        # n_bodyparts x n_frames
+            kp_dict["keypoints_likelihood" + suffix] = self.pose_likelihood[i]  # n_bodyparts x n_frames
+            kp_dict["keypoints_labels" + suffix] = np.array(
+                self.keypoints_labels[i], dtype=object
+            )  # bodypart name strings as MATLAB cell array
+
+        # Merge into existing proc data if .npy is present, otherwise save standalone
+        if os.path.exists(npy_path):
+            proc = np.load(npy_path, allow_pickle=True).item()
+            d2 = {}
+            for k in proc.keys():
+                if (
+                    isinstance(proc[k], list)
+                    and len(proc[k]) > 0
+                    and isinstance(proc[k][0], np.ndarray)
+                ):
+                    for j in range(len(proc[k])):
+                        d2[k + "_%d" % j] = proc[k][j]
+                else:
+                    d2[k] = proc[k]
+            d2.update(kp_dict)
+        else:
+            d2 = kp_dict
+
+        scipy.io.savemat(mat_path, d2)
+        print("Keypoints exported to:", mat_path)
+        self.update_status_bar("Keypoints exported to " + mat_path)
 
     def process_subset_keypoints(self, subset_frame_indices, model_name=None):
         if self.pose_model is None:
@@ -1513,26 +1560,21 @@ class MainW(QtWidgets.QMainWindow):
             print("Loading keypoints:", self.poseFilepath[video_id])
             pose_data = h5py.File(self.poseFilepath[video_id], "r")["Facemap"]
             bodyparts = np.array([])
+            x_coords, y_coords, likelihoods = [], [], []
             for (
                 bodypart
             ) in (
                 refine_pose.BODYPARTS
             ):  # Load bodyparts in the same order as in FacemapDataset
                 bodyparts = np.append(bodyparts, bodypart)
-                self.pose_x_coord.append(pose_data[bodypart]["x"][:])
-                self.pose_y_coord.append(pose_data[bodypart]["y"][:])
-                self.pose_likelihood.append(pose_data[bodypart]["likelihood"][:])
+                x_coords.append(pose_data[bodypart]["x"][:])
+                y_coords.append(pose_data[bodypart]["y"][:])
+                likelihoods.append(pose_data[bodypart]["likelihood"][:])
 
             self.keypoints_labels.append(bodyparts)
-            self.pose_x_coord = np.array(
-                [self.pose_x_coord]
-            )  # size: keypoints x frames
-            self.pose_y_coord = np.array(
-                [self.pose_y_coord]
-            )  # size: keypoints x frames
-            self.pose_likelihood = np.array(
-                [self.pose_likelihood]
-            )  # size: keypoints x frames
+            self.pose_x_coord.append(np.array(x_coords))
+            self.pose_y_coord.append(np.array(y_coords))
+            self.pose_likelihood.append(np.array(likelihoods))
             colors = cm.get_cmap("jet")(
                 np.linspace(0, 1.0, len(self.keypoints_labels[video_id]))
             )
